@@ -9,6 +9,7 @@ app_license = "MIT"
 # ------------------
 
 fixtures = [
+    "Workspace",
     "Tax Type",
     "Tax System",
     "Payment Form",
