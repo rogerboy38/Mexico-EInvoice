@@ -67,16 +67,32 @@ def get_customer_details(doc):
         "Customer", doc.customer, ["customer_name", "tax_id", "tax_system"]
     )
 
+    # Get the customer's primary billing address
+    customer_address = frappe.get_doc("Customer", doc.customer).get("customer_primary_address")
+    if not customer_address:
+        # Fallback: look for default billing address
+        customer_address = frappe.db.get_value(
+            "Dynamic Link",
+            {"parenttype": "Address", "link_doctype": "Customer", "link_name": doc.customer, "is_primary_address": 1},
+            "parent"
+        )
+    
+    # Use the customer's primary address if available, otherwise use doc.customer_address
+    address_name = customer_address or doc.customer_address
+    
     address = frappe.db.sql(
         """
             SELECT email_id, pincode
             FROM `tabAddress`
             WHERE name = %s
         """,
-        (doc.customer_address,),
+        (address_name,),
         as_dict=1,
     )
-
+    
+    # Debug: print what address we're using
+    frappe.flags.einvoice_debug = f"Using address: {address_name}, pincode: {address[0]['pincode']}"
+    
     customer = {
         "legal_name": customer_name,
         "email": address[0]["email_id"],
