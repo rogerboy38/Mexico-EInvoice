@@ -67,6 +67,15 @@ def get_customer_details(doc):
         "Customer", doc.customer, ["customer_name", "tax_id", "tax_system"]
     )
 
+    # Determine if customer is foreign (export) - check for Mexican RFC format
+    # Mexican RFC format: 6 chars for individuals, 12 chars for companies (e.g., AAA010101XXX)
+    is_foreign = False
+    if tax_id:
+        # If tax_id doesn't match Mexican RFC pattern, it's foreign
+        import re
+        if not re.match(r'^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{2,3}$', tax_id.upper()):
+            is_foreign = True
+
     # Get the customer's primary billing address
     customer_address = frappe.get_doc("Customer", doc.customer).get("customer_primary_address")
     if not customer_address:
@@ -80,9 +89,10 @@ def get_customer_details(doc):
     # Use the customer's primary address if available, otherwise use doc.customer_address
     address_name = customer_address or doc.customer_address
     
-    address = frappe.db.sql(
+    # Get address details including country
+    address_data = frappe.db.sql(
         """
-            SELECT email_id, pincode
+            SELECT email_id, pincode, country
             FROM `tabAddress`
             WHERE name = %s
         """,
@@ -90,15 +100,29 @@ def get_customer_details(doc):
         as_dict=1,
     )
     
+    zip_code = address_data[0]["pincode"]
+    country = address_data[0].get("country", "MEX")
+    
+    # For foreign/export customers, handle postal code differently
+    if is_foreign:
+        # For foreign customers, use standard foreign postal code or the actual foreign postal code
+        # Facturapi requires a valid foreign postal code or "00000" for non-Mexican addresses
+        if not zip_code or zip_code == "19007":
+            zip_code = "00000"  # Standard for foreign addresses
+        
+        # Set country to actual country code (not MEX) for export invoices
+        if country == "Mexico":
+            country = "USA"  # Default to USA for export if not specified, or could be extracted from address
+    
     # Debug: print what address we're using
-    frappe.flags.einvoice_debug = f"Using address: {address_name}, pincode: {address[0]['pincode']}"
+    frappe.flags.einvoice_debug = f"Using address: {address_name}, pincode: {zip_code}, country: {country}, is_foreign: {is_foreign}"
     
     customer = {
         "legal_name": customer_name,
-        "email": address[0]["email_id"],
+        "email": address_data[0]["email_id"],
         "tax_id": tax_id,
         "tax_system": tax_system,
-        "address": {"zip": address[0]["pincode"]},
+        "address": {"zip": zip_code, "country": country},
     }
     return customer
 
