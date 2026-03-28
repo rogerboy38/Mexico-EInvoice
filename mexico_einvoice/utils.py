@@ -108,13 +108,24 @@ def get_items(doc):
             # Try getting from Item master
             item_doc = frappe.get_doc("Item", item.item_code)
             if item_doc.mx_product_service_key:
-                product_key = item_doc.mx_product_service_key
+                # mx_product_service_key is a Link field - resolve to get the SAT code
+                try:
+                    sat_master = frappe.get_doc("SAT Product Service Key", item_doc.mx_product_service_key)
+                    # Try common field names for the code
+                    product_key = (
+                        sat_master.get("product_key") or 
+                        sat_master.get("sat_key") or 
+                        sat_master.get("key") or 
+                        sat_master.name
+                    )
+                except:
+                    product_key = item_doc.mx_product_service_key
             elif item_doc.product_key:
                 product_key = item_doc.product_key
         
         # Strip leading zeros for SAT API
         if product_key:
-            product_key = product_key.lstrip("0")
+            product_key = str(product_key).lstrip("0")
         
         items.append(
             {
