@@ -112,7 +112,13 @@ def get_items(doc):
             elif item_doc.product_key:
                 product_key = item_doc.product_key
         
-        # Do NOT strip leading zeros - SAT product keys like "50436802" are significant
+        # Convert to integer for Facturapi API (must be number, not string)
+        if product_key:
+            try:
+                product_key = int(product_key)
+            except (ValueError, TypeError):
+                # Keep as string if conversion fails
+                pass
 
         items.append(
             {
