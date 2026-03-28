@@ -69,11 +69,17 @@ def get_customer_details(doc):
 
     # Determine if customer is foreign (export) - check for Mexican RFC format
     # Mexican RFC format: 6 chars for individuals, 12 chars for companies (e.g., AAA010101XXX)
+    # Also exclude generic RFCs for foreigners: XAXX010101000, XEXX010101000
     is_foreign = False
     if tax_id:
-        # If tax_id doesn't match Mexican RFC pattern, it's foreign
         import re
-        if not re.match(r'^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{2,3}$', tax_id.upper()):
+        # Check if it's a valid Mexican RFC (excluding generic foreign RFCs)
+        if re.match(r'^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{2,3}$', tax_id.upper()):
+            # Also check it's not a generic foreign RFC
+            if tax_id.upper().startswith(('XAXX', 'XEXX', 'XIME', 'XAUK')):
+                is_foreign = True
+        else:
+            # Doesn't match Mexican RFC pattern - it's foreign
             is_foreign = True
 
     # Get the customer's primary billing address
