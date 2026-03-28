@@ -103,26 +103,57 @@ def get_customer_details(doc):
     zip_code = address_data[0]["pincode"]
     country = address_data[0].get("country", "MEX")
     
+    # Map common country names to ISO 3166-1 alpha-3 codes
+    country_code_map = {
+        "Mexico": "MEX",
+        "United States": "USA",
+        "United States of America": "USA",
+        "USA": "USA",
+        "Canada": "CAN",
+        "United Kingdom": "GBR",
+        "Germany": "DEU",
+        "France": "FRA",
+        "Japan": "JPN",
+        "China": "CHN",
+        "Spain": "ESP",
+    }
+    
+    # Convert country name to ISO code if needed
+    if country in country_code_map:
+        country = country_code_map[country]
+    elif len(country) == 2:  # Already 2-letter code, convert to 3-letter
+        # Common 2-letter to 3-letter mappings
+        country_2to3 = {
+            "MX": "MEX", "US": "USA", "CA": "CAN", "GB": "GBR",
+            "DE": "DEU", "FR": "FRA", "JP": "JPN", "CN": "CHN", "ES": "ESP"
+        }
+        country = country_2to3.get(country.upper(), "MEX")
+    # If it's already 3 letters and valid, keep it
+    
     # For foreign/export customers, handle postal code differently
     if is_foreign:
-        # For foreign customers, use standard foreign postal code or the actual foreign postal code
-        # Facturapi requires a valid foreign postal code or "00000" for non-Mexican addresses
+        # For foreign customers, use standard foreign postal code or "00000" for non-Mexican addresses
         if not zip_code or zip_code == "19007":
             zip_code = "00000"  # Standard for foreign addresses
         
-        # Set country to actual country code (not MEX) for export invoices
-        if country == "Mexico":
-            country = "USA"  # Default to USA for export if not specified, or could be extracted from address
+        # Ensure country is not MEX for export invoices
+        if country == "MEX":
+            country = "USA"  # Default to USA for export if not specified
     
     # Debug: print what address we're using
     frappe.flags.einvoice_debug = f"Using address: {address_name}, pincode: {zip_code}, country: {country}, is_foreign: {is_foreign}"
+    
+    # Build customer dict - only add country field for foreign/export customers
+    address_dict = {"zip": zip_code}
+    if is_foreign:
+        address_dict["country"] = country  # Only for export customers
     
     customer = {
         "legal_name": customer_name,
         "email": address_data[0]["email_id"],
         "tax_id": tax_id,
         "tax_system": tax_system,
-        "address": {"zip": zip_code, "country": country},
+        "address": address_dict,
     }
     return customer
 
