@@ -37,14 +37,18 @@ def generate_einvoice(doc, method):
         response = requests.post(url, headers=header, data=data)
         if response.status_code == 200:
             response = response.json()
-            doc.e_invoice_id = response.get("id")
-            doc.uuid = response.get("uuid")
-            doc.sat_signature = response.get("sat_signature")
-            doc.signature = response.get("stamp").get("signature")
-            doc.invoice_status = response.get("status")
-            doc.sat_cert_number = response.get("stamp").get("sat_cert_number")
-            doc.cfdi_version = response.get("cfdi_version")
-            doc.verification_url = response.get("verification_url")
+            
+            # Update fields directly in database since document may be submitted
+            frappe.db.set_value("Sales Invoice", doc.name, {
+                "e_invoice_id": response.get("id"),
+                "uuid": response.get("uuid"),
+                "sat_signature": response.get("sat_signature"),
+                "signature": response.get("stamp").get("signature"),
+                "invoice_status": response.get("status"),
+                "sat_cert_number": response.get("stamp").get("sat_cert_number"),
+                "cfdi_version": response.get("cfdi_version"),
+                "verification_url": response.get("verification_url")
+            })
 
             validate_partial_payment(doc, response)
         else:
