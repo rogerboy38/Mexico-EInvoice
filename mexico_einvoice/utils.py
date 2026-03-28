@@ -102,15 +102,18 @@ def get_items(doc):
             for tax in item_tax_doc.taxes:
                 taxes.append({"type": tax.mexico_tax_type, "rate": tax.rate / 100})
 
-        # Get product_key from Sales Invoice Item, fallback to Item master
-        product_key = item.product_key
-        if not product_key:
-            # Try getting from Item master - use mx_product_service_key directly (it's the SAT code)
-            item_doc = frappe.get_doc("Item", item.item_code)
-            if item_doc.mx_product_service_key:
-                product_key = item_doc.mx_product_service_key
-            elif item_doc.product_key:
-                product_key = item_doc.product_key
+        # Get product_key - prioritize Item master mx_product_service_key over Sales Invoice Item product_key
+        product_key = None
+        
+        # First check Item master for mx_product_service_key (the correct SAT code)
+        item_doc = frappe.get_doc("Item", item.item_code)
+        if item_doc.mx_product_service_key:
+            product_key = item_doc.mx_product_service_key
+        elif item_doc.product_key:
+            product_key = item_doc.product_key
+        # Finally fallback to Sales Invoice Item's product_key
+        elif item.product_key:
+            product_key = item.product_key
         
         # Convert to integer for Facturapi API (must be number, not string)
         if product_key:
