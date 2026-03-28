@@ -102,12 +102,26 @@ def get_items(doc):
             for tax in item_tax_doc.taxes:
                 taxes.append({"type": tax.mexico_tax_type, "rate": tax.rate / 100})
 
+        # Get product_key from Sales Invoice Item, fallback to Item master
+        product_key = item.product_key
+        if not product_key:
+            # Try getting from Item master
+            item_doc = frappe.get_doc("Item", item.item_code)
+            if item_doc.mx_product_service_key:
+                product_key = item_doc.mx_product_service_key
+            elif item_doc.product_key:
+                product_key = item_doc.product_key
+        
+        # Strip leading zeros for SAT API
+        if product_key:
+            product_key = product_key.lstrip("0")
+        
         items.append(
             {
                 "quantity": item.qty,
                 "product": {
                     "description": re.sub("<[^<]+?>", "", _(f"{item.description}")),
-                    "product_key": item.product_key.lstrip("0") if item.product_key else item.product_key,
+                    "product_key": product_key,
                     "price": item.rate,
                     "tax_included": False,
                     "taxes": taxes,
