@@ -199,11 +199,13 @@ def update_payment(doc, method):
             taxes = []
             if si_doc.taxes_and_charges:
                 for tax in doc.taxes:
+                    # Handle None tax.rate - default to 0
+                    tax_rate = tax.rate or 0
                     taxes.append(
                         {
-                            "base": rel_doc.allocated_amount / (1 + (tax.rate / 100)),
+                            "base": rel_doc.allocated_amount / (1 + (tax_rate / 100)) if tax_rate else rel_doc.allocated_amount,
                             "type": "IVA",
-                            "rate": tax.rate / 100,
+                            "rate": tax_rate / 100,
                         }
                     )
             else:
