@@ -264,8 +264,19 @@ def get_customer_from_payment(doc):
         "Customer", doc.party, ["customer_name", "tax_id", "tax_system"]
     )
 
+    # Determine if customer is foreign (export) - check for Mexican RFC format or generic foreign RFC
+    is_foreign = False
+    if tax_id:
+        import re
+        # Check for generic foreign RFCs (XAXX, XEXX)
+        if tax_id.upper().startswith(("XAXX", "XEXX", "XEXT")):
+            is_foreign = True
+        # Check if doesn't match Mexican RFC pattern
+        elif not re.match(r'^[A-Z&Ñ]{3,4}[0-9]{6}[A-Z0-9]{2,3}$', tax_id.upper()):
+            is_foreign = True
+
     query = (
-        f"select email_id, pincode from `tabAddress` where name in "
+        f"select email_id, pincode, country from `tabAddress` where name in "
         f'(select customer_primary_address from `tabCustomer` where name = "{doc.party}")'
     )
     address = frappe.db.sql(query, as_dict=1)
@@ -273,13 +284,37 @@ def get_customer_from_payment(doc):
     if not address:
         frappe.throw(_("Please, update Customer Primary Address in customer Doctype"))
 
+    zip_code = address[0]["pincode"]
+    country = address[0].get("country", "Mexico")
+    
+    # For foreign/export customers, handle postal code differently
+    if is_foreign:
+        # For foreign customers, use standard foreign postal code or "00000"
+        if not zip_code or zip_code == "19007":
+            zip_code = "00000"
+        
+        # Convert country to ISO 3-letter code
+        country_2to3 = {
+            "MEXICO": "MEX", "USA": "USA", "UNITED STATES": "USA",
+            "CANADA": "CAN", "CANADIAN": "CAN", "UNITED KINGDOM": "GBR",
+            "GERMANY": "DEU", "FRANCE": "FRA", "SPAIN": "ESP",
+            "CHINA": "CHN", "JAPAN": "JPN", "KOREA": "KOR",
+        }
+        country = country_2to3.get(country.upper(), "USA") if country else "USA"
+    
     customer = {
         "legal_name": customer_name,
         "email": address[0]["email_id"],
         "tax_id": tax_id,
         "tax_system": tax_system,
-        "address": {"zip": address[0]["pincode"]},
     }
+    
+    # Only add country for foreign/export customers
+    if is_foreign:
+        customer["address"] = {"zip": zip_code, "country": country}
+    else:
+        customer["address"] = {"zip": zip_code}
+    
     return customer
 
 
