@@ -107,7 +107,7 @@ def get_items(doc):
                 "quantity": item.qty,
                 "product": {
                     "description": re.sub("<[^<]+?>", "", _(f"{item.description}")),
-                    "product_key": item.product_key,
+                    "product_key": item.product_key.lstrip("0") if item.product_key else item.product_key,
                     "price": item.rate,
                     "tax_included": False,
                     "taxes": taxes,
