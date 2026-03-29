@@ -126,6 +126,7 @@ def get_customer_details(doc):
         "Japan": "JPN",
         "China": "CHN",
         "Spain": "ESP",
+        "Italy": "ITA",
     }
     
     # Convert country name to ISO code if needed
@@ -135,16 +136,18 @@ def get_customer_details(doc):
         # Common 2-letter to 3-letter mappings
         country_2to3 = {
             "MX": "MEX", "US": "USA", "CA": "CAN", "GB": "GBR",
-            "DE": "DEU", "FR": "FRA", "JP": "JPN", "CN": "CHN", "ES": "ESP"
+            "DE": "DEU", "FR": "FRA", "JP": "JPN", "CN": "CHN", "ES": "ESP",
+            "IT": "ITA"
         }
         country = country_2to3.get(country.upper(), "MEX")
     # If it's already 3 letters and valid, keep it
     
-    # For foreign/export customers, handle postal code differently
+    # For foreign/export customers, handle postal code and tax_system unconditionally
     if is_foreign:
-        # For foreign customers, use standard foreign postal code or "00000" for non-Mexican addresses
-        if not zip_code or zip_code == "19007":
-            zip_code = "00000"  # Standard for foreign addresses
+        # For foreign customers, ALWAYS use 00000 regardless of address linked
+        zip_code = "00000"
+        # Force tax_system to 616 (Sin obligaciones fiscales) for foreign customers
+        tax_system = "616"
         
         # Ensure country is not MEX for export invoices
         if country == "MEX":
@@ -287,11 +290,12 @@ def get_customer_from_payment(doc):
     zip_code = address[0]["pincode"]
     country = address[0].get("country", "Mexico")
     
-    # For foreign/export customers, handle postal code differently
+    # For foreign/export customers, handle postal code and tax_system unconditionally
     if is_foreign:
-        # For foreign customers, use standard foreign postal code or "00000"
-        if not zip_code or zip_code == "19007":
-            zip_code = "00000"
+        # For foreign customers, ALWAYS use 00000 regardless of address linked
+        zip_code = "00000"
+        # Force tax_system to 616 (Sin obligaciones fiscales) for foreign customers
+        tax_system = "616"
         
         # Convert country to ISO 3-letter code
         country_2to3 = {
@@ -299,6 +303,7 @@ def get_customer_from_payment(doc):
             "CANADA": "CAN", "CANADIAN": "CAN", "UNITED KINGDOM": "GBR",
             "GERMANY": "DEU", "FRANCE": "FRA", "SPAIN": "ESP",
             "CHINA": "CHN", "JAPAN": "JPN", "KOREA": "KOR",
+            "ITALY": "ITA", "ITALIA": "ITA", "IT": "ITA",
         }
         country = country_2to3.get(country.upper(), "USA") if country else "USA"
     
@@ -329,6 +334,15 @@ def update_payment(doc, method):
     for rel_doc in doc.references:
         if rel_doc.reference_doctype == "Sales Invoice":
             uuid = frappe.get_value("Sales Invoice", rel_doc.reference_name, "uuid")
+            
+            # BUG-88: Validate UUID exists before building payload
+            if not uuid:
+                frappe.throw(
+                    _(f"Sales Invoice {rel_doc.reference_name} has no CFDI UUID. "
+                      f"Please generate the e-invoice (CFDI) for {rel_doc.reference_name} before submitting the payment. "
+                      f"The Payment Complement (Complemento de Pago) requires the original invoice UUID.")
+                )
+            
             installments = linked_sales_invoice(rel_doc.reference_name)
 
             # update taxes
