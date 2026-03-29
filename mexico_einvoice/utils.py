@@ -367,7 +367,9 @@ def update_payment(doc, method):
             invoice_details = {
                 "uuid": uuid,
                 "amount": rel_doc.allocated_amount,
-                "last_balance": rel_doc.outstanding_amount,
+                # BUG-88: Fix last_balance - if outstanding is 0 or negative (payment already applied),
+                # use allocated_amount as the remaining balance before this payment
+                "last_balance": rel_doc.outstanding_amount if rel_doc.outstanding_amount and rel_doc.outstanding_amount > 0 else rel_doc.allocated_amount,
                 "installment": installments + 1,
                 "taxes": taxes,
             }
