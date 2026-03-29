@@ -292,7 +292,10 @@ def get_customer_from_payment(doc):
     
     # For foreign/export customers, handle postal code and tax_system unconditionally
     if is_foreign:
-        # For foreign customers, ALWAYS use 00000 regardless of address linked
+        # For foreign customers, use 00000 BUT the API needs to NOT validate it
+        # Option 1: Don't include address at all for foreign customers (most common for exports)
+        # Option 2: Use a valid fallback postal code
+        # We'll use option 1 - no address fields for foreign exports
         zip_code = "00000"
         # Force tax_system to 616 (Sin obligaciones fiscales) for foreign customers
         tax_system = "616"
@@ -314,9 +317,11 @@ def get_customer_from_payment(doc):
         "tax_system": tax_system,
     }
     
-    # Only add country for foreign/export customers
+    # For foreign/export customers - DON'T include address at all
+    # The API rejects "00000" postal code, but for exports the address is optional
     if is_foreign:
-        customer["address"] = {"zip": zip_code, "country": country}
+        # For exports, don't send address - FacturAPI will handle it
+        pass
     else:
         customer["address"] = {"zip": zip_code}
     
