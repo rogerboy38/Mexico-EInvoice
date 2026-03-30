@@ -204,11 +204,19 @@ def get_items(doc):
         if item.item_tax_template:
             item_tax_doc = frappe.get_doc("Item Tax Template", item.item_tax_template)
             for tax in item_tax_doc.taxes:
-                taxes.append({"type": tax.maxico_tax_type, "rate": tax.tax_rate / 100})
+                # Normalize tax type to valid SAT values: IVA, IEPS, ISR
+                tax_type = (tax.maxico_tax_type or "").upper()
+                if tax_type not in ("IVA", "IEPS", "ISR"):
+                    tax_type = "IVA"  # Default to IVA if invalid
+                taxes.append({"type": tax_type, "rate": tax.tax_rate / 100})
         elif doc.taxes_and_charges:
             item_tax_doc = frappe.get_doc("Sales Taxes and Charges Template", doc.taxes_and_charges)
             for tax in item_tax_doc.taxes:
-                taxes.append({"type": tax.mexico_tax_type, "rate": tax.rate / 100})
+                # Normalize tax type to valid SAT values: IVA, IEPS, ISR
+                tax_type = (tax.mexico_tax_type or "").upper()
+                if tax_type not in ("IVA", "IEPS", "ISR"):
+                    tax_type = "IVA"  # Default to IVA if invalid
+                taxes.append({"type": tax_type, "rate": tax.rate / 100})
 
         # Get product_key - prioritize Item master mx_product_service_key over Sales Invoice Item product_key
         product_key = None
