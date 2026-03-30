@@ -89,27 +89,15 @@ def get_customer_details(doc):
     # Get the customer's primary billing address
     customer_address = frappe.get_doc("Customer", doc.customer).get("customer_primary_address")
     if not customer_address:
-        # Fallback: look for primary billing address using proper join
+        # Fallback: get ANY address linked to customer (just take first one)
         result = frappe.db.sql("""
             SELECT a.name FROM `tabAddress` a
             INNER JOIN `tabDynamic Link` dl ON dl.parent = a.name
             WHERE dl.link_doctype = 'Customer' 
             AND dl.link_name = %(customer)s
-            AND a.is_primary_address = 1
             LIMIT 1
         """, {"customer": doc.customer})
         customer_address = result[0][0] if result else None
-        
-        # Second fallback: get ANY address linked to customer
-        if not customer_address:
-            result = frappe.db.sql("""
-                SELECT a.name FROM `tabAddress` a
-                INNER JOIN `tabDynamic Link` dl ON dl.parent = a.name
-                WHERE dl.link_doctype = 'Customer' 
-                AND dl.link_name = %(customer)s
-                LIMIT 1
-            """, {"customer": doc.customer})
-            customer_address = result[0][0] if result else None
     
     # Use the customer's primary address if available, otherwise use doc.customer_address
     address_name = customer_address or doc.customer_address
