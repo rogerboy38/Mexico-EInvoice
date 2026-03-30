@@ -89,29 +89,57 @@ def get_customer_details(doc):
     # Get the customer's primary billing address
     customer_address = frappe.get_doc("Customer", doc.customer).get("customer_primary_address")
     if not customer_address:
-        # Fallback: look for default billing address
-        customer_address = frappe.db.get_value(
-            "Dynamic Link",
-            {"parenttype": "Address", "link_doctype": "Customer", "link_name": doc.customer, "is_primary_address": 1},
-            "parent"
-        )
+        # Fallback: look for primary billing address using proper join
+        result = frappe.db.sql("""
+            SELECT a.name FROM `tabAddress` a
+            INNER JOIN `tabDynamic Link` dl ON dl.parent = a.name
+            WHERE dl.link_doctype = 'Customer' 
+            AND dl.link_name = %(customer)s
+            AND a.is_primary_address = 1
+            LIMIT 1
+        """, {"customer": doc.customer})
+        customer_address = result[0][0] if result else None
+        
+        # Second fallback: get ANY address linked to customer
+        if not customer_address:
+            result = frappe.db.sql("""
+                SELECT a.name FROM `tabAddress` a
+                INNER JOIN `tabDynamic Link` dl ON dl.parent = a.name
+                WHERE dl.link_doctype = 'Customer' 
+                AND dl.link_name = %(customer)s
+                LIMIT 1
+            """, {"customer": doc.customer})
+            customer_address = result[0][0] if result else None
     
     # Use the customer's primary address if available, otherwise use doc.customer_address
     address_name = customer_address or doc.customer_address
     
-    # Get address details including country
-    address_data = frappe.db.sql(
-        """
-            SELECT email_id, pincode, country
-            FROM `tabAddress`
-            WHERE name = %s
-        """,
-        (address_name,),
-        as_dict=1,
-    )
+    # Final fallback: if still no address, use empty string
+    if not address_name:
+        frappe.flags.einvoice_debug = "No customer address found, using fallback"
+        address_name = None
     
-    zip_code = address_data[0]["pincode"]
-    country = address_data[0].get("country", "MEX")
+    # Get address details including country - handle None address case
+    address_data = []
+    if address_name:
+        address_data = frappe.db.sql(
+            """
+                SELECT email_id, pincode, country
+                FROM `tabAddress`
+                WHERE name = %s
+            """,
+            (address_name,),
+            as_dict=1,
+        )
+    
+    # Handle case where no address data is found
+    if not address_data:
+        frappe.flags.einvoice_debug = "No address data found, using defaults"
+        zip_code = "00000"
+        country = "MEX"
+    else:
+        zip_code = address_data[0]["pincode"]
+        country = address_data[0].get("country", "MEX")
     
     # Map common country names to ISO 3166-1 alpha-3 codes
     country_code_map = {
@@ -156,6 +184,14 @@ def get_customer_details(doc):
     # Debug: print what address we're using
     frappe.flags.einvoice_debug = f"Using address: {address_name}, pincode: {zip_code}, country: {country}, is_foreign: {is_foreign}"
     
+    # Get email from address or fallback to customer email
+    email_id = None
+    if address_data:
+        email_id = address_data[0].get("email_id")
+    if not email_id:
+        # Fallback to customer's default email
+        email_id = frappe.db.get_value("Customer", doc.customer, "customer_primary_email")
+    
     # Build customer dict - only add country field for foreign/export customers
     address_dict = {"zip": zip_code}
     if is_foreign:
@@ -163,7 +199,7 @@ def get_customer_details(doc):
     
     customer = {
         "legal_name": customer_name,
-        "email": address_data[0]["email_id"],
+        "email": email_id,
         "tax_id": tax_id,
         "tax_system": tax_system,
         "address": address_dict,
