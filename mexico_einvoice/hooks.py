@@ -9,7 +9,7 @@ app_license = "MIT"
 # ------------------
 
 fixtures = [
-    "Workspace",
+    {"doctype": "Workspace", "filters": [["module", "=", "Mexico Einvoice"]]},
     "Tax Type",
     "Tax System",
     "Payment Form",
